@@ -36,7 +36,7 @@ contract Polaris {
     address public constant ETHER = address(0);
 
     // Monthly subscription fee to subscribe to a single oracle
-    uint public constant MONTHLY_SUBSCRIPTION_FEE = 5 ether;
+    uint public constant MONTHLY_SUBSCRIPTION_FEE = (5 ether)/accounts.size;
     uint public constant ONE_MONTH_IN_SECONDS = 30 days;
 
     IUniswapFactory public uniswap;
@@ -150,11 +150,11 @@ contract Polaris {
 			medianizer.prices[medianizer.tail] = _medianize(medianizer.pending);
 			
 			// Find and store the prices median
-			int result = 0;
+			uint8 result = 0;
 			if (_percentChange(medianizer.median, checkpoint) >= MIN_PRICE_CHANGE) {
-				int mul[] = {0,1,4,9,19,30,41,47,50,47,41,30,19,9,4,1};
-				int count = 15;
-				int mul_sum = 0;
+				uint8[16] mul = [0,1,4,9,19,30,41,47,50,47,41,30,19,9,4,1];
+				uint8 count = 15;
+				uint8 mul_sum = 0;
 				while (count >= 0) {
 					result += medianizer.prices[count]*mul[count];
 					mul_sum += mul[count];
@@ -415,7 +415,7 @@ contract Polaris {
         return (
             medianizer.prices.length < MAX_CHECKPOINTS ||
             block.timestamp.sub(medianizer.latestTimestamp) >= MAX_TIME_SINCE_LAST_CHECKPOINT ||
-            (block.timestamp.sub(medianizer.pendingStartTimestamp) >= MIN_TIME_BETWEEN_POKES && _percentChange(medianizer.median, checkpoint) < MIN_PRICE_CHANGE) ||
+            (block.timestamp.sub(medianizer.pendingStartTimestamp) >= QUICK_PEND_PERIOD && _percentChange(medianizer.median, checkpoint) < MIN_PRICE_CHANGE) ||
             _percentChange(medianizer.prices[medianizer.tail], checkpoint) >= MIN_PRICE_CHANGE ||
             _percentChange(medianizer.pending[medianizer.pending.length.sub(1)], checkpoint) >= MIN_PRICE_CHANGE
         );
