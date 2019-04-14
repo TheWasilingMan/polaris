@@ -26,7 +26,6 @@ contract Polaris {
 
     // Conditions for checkpoint reward
     uint public constant MIN_PRICE_CHANGE = .01e18; // 1%
-    uint public constant MAX_TIME_SINCE_LAST_CHECKPOINT = 3 hours;
 
     uint public constant PENDING_PERIOD = 30 minutes;
 	uint public constant QUICK_PEND_PERIOD = 0.25 minutes;
@@ -152,28 +151,27 @@ contract Polaris {
 			// Find and store the prices median
 			uint8 result = 0;
 			if (_percentChange(medianizer.median, checkpoint) >= MIN_PRICE_CHANGE) {
-				uint8[16] mul = [0,1,4,9,19,30,41,47,50,47,41,30,19,9,4,1];
+				uint8[16] weights = [0,1,4,9,19,30,41,47,50,47,41,30,19,9,4,1];
 				uint8 count = 15;
-				uint8 mul_sum = 0;
+				uint8 weights_sum = 0;
 				while (count >= 0) {
-					result += medianizer.prices[count]*mul[count];
-					mul_sum += mul[count];
+					result += medianizer.prices[count]*weights[count];
+					weights_sum += weights[count];
 					count -= 1;
 				}
-				result /= mul_sum;
+				result /= weights_sum;
 			}
 			else {
 				result = (medianizer.median + medianizer.prices[medianizer.tail]) / 2;
-				medianizer.median = result;
 			}
 			
 			medianizer.median = result;
 			if (_percentChange(medianizer.median, checkpoint) >= MIN_PRICE_CHANGE) {
 					quick_pend = true;
 				}
-				else {
-					quick_pend = false;
-				}
+			else {
+				quick_pend = false;
+			}
             //medianizer.median = _medianize(medianizer.prices);
 
             emit NewMedian(token, medianizer.median.ethReserve, medianizer.median.tokenReserve);
@@ -414,10 +412,7 @@ contract Polaris {
 
         return (
             medianizer.prices.length < MAX_CHECKPOINTS ||
-            block.timestamp.sub(medianizer.latestTimestamp) >= MAX_TIME_SINCE_LAST_CHECKPOINT ||
-            (block.timestamp.sub(medianizer.pendingStartTimestamp) >= QUICK_PEND_PERIOD && _percentChange(medianizer.median, checkpoint) < MIN_PRICE_CHANGE) ||
-            _percentChange(medianizer.prices[medianizer.tail], checkpoint) >= MIN_PRICE_CHANGE ||
-            _percentChange(medianizer.pending[medianizer.pending.length.sub(1)], checkpoint) >= MIN_PRICE_CHANGE
+            (block.timestamp.sub(medianizer.pendingStartTimestamp) >= QUICK_PEND_PERIOD && _percentChange(medianizer.median, checkpoint) >= MIN_PRICE_CHANGE) || (block.timestamp.sub(medianizer.pendingStartTimestamp) >= PENDING_PERIOD
         );
     }
 
