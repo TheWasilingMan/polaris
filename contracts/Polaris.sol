@@ -28,7 +28,10 @@ contract Polaris {
     uint public constant MIN_PRICE_CHANGE = .01e18; // 1%
     uint public constant MAX_TIME_SINCE_LAST_CHECKPOINT = 3 hours;
 
-    uint public constant PENDING_PERIOD = 3.5 minutes;
+    uint public constant PENDING_PERIOD = 30 minutes;
+	uint public constant QUICK_PEND_PERIOD = 0.25 minutes;
+	
+	bool public quick_pend = false;
 
     address public constant ETHER = address(0);
 
@@ -132,7 +135,7 @@ contract Polaris {
             }
 
             // If pending checkpoints are old, reset pending checkpoints
-            if (block.timestamp.sub(medianizer.pendingStartTimestamp) > PENDING_PERIOD || medianizer.pending.length == MAX_CHECKPOINTS) {
+            if ((quick_pend == true && block.timestamp.sub(medianizer.pendingStartTimestamp) > QUICK_PEND_PERIOD) || (quick_pend == false && block.timestamp.sub(medianizer.pendingStartTimestamp) > PENDING_PERIOD) || medianizer.pending.length == MAX_CHECKPOINTS) {
                 medianizer.pending.length = 0;
                 medianizer.tail = (medianizer.tail + 1) % MAX_CHECKPOINTS;
                 medianizer.pendingStartTimestamp = block.timestamp;
@@ -142,12 +145,36 @@ contract Polaris {
 
             // Add the checkpoint to the pending array
             medianizer.pending.push(checkpoint);
-            
+			
             // Add the pending median to the prices array
-            medianizer.prices[medianizer.tail] = _medianize(medianizer.pending);
-            
-            // Find and store the prices median
-            medianizer.median = _medianize(medianizer.prices);
+			medianizer.prices[medianizer.tail] = _medianize(medianizer.pending);
+			
+			// Find and store the prices median
+			int result = 0;
+			if (_percentChange(medianizer.median, checkpoint) >= MIN_PRICE_CHANGE) {
+				int mul[] = {0,1,4,9,19,30,41,47,50,47,41,30,19,9,4,1};
+				int count = 15;
+				int mul_sum = 0;
+				while (count >= 0) {
+					result += medianizer.prices[count]*mul[count];
+					mul_sum += mul[count];
+					count -= 1;
+				}
+				result /= mul_sum;
+			}
+			else {
+				result = (medianizer.median + medianizer.prices[medianizer.tail]) / 2;
+				medianizer.median = result;
+			}
+			
+			medianizer.median = result;
+			if (_percentChange(medianizer.median, checkpoint) >= MIN_PRICE_CHANGE) {
+					quick_pend = true;
+				}
+				else {
+					quick_pend = false;
+				}
+            //medianizer.median = _medianize(medianizer.prices);
 
             emit NewMedian(token, medianizer.median.ethReserve, medianizer.median.tokenReserve);
         }
@@ -388,7 +415,7 @@ contract Polaris {
         return (
             medianizer.prices.length < MAX_CHECKPOINTS ||
             block.timestamp.sub(medianizer.latestTimestamp) >= MAX_TIME_SINCE_LAST_CHECKPOINT ||
-            (block.timestamp.sub(medianizer.pendingStartTimestamp) >= PENDING_PERIOD && _percentChange(medianizer.median, checkpoint) >= MIN_PRICE_CHANGE) ||
+            (block.timestamp.sub(medianizer.pendingStartTimestamp) >= MIN_TIME_BETWEEN_POKES && _percentChange(medianizer.median, checkpoint) < MIN_PRICE_CHANGE) ||
             _percentChange(medianizer.prices[medianizer.tail], checkpoint) >= MIN_PRICE_CHANGE ||
             _percentChange(medianizer.pending[medianizer.pending.length.sub(1)], checkpoint) >= MIN_PRICE_CHANGE
         );
